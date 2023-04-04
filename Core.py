@@ -3,8 +3,8 @@ from binance.enums import *
 import time
 
 # API anahtarları
-api_key = 'wDlvMXEY27d35HaK5Unpcvu6faqbIZF5Mr4BHQgThyOJnjHHSTwycJNwPxDSc8ov'
-api_secret = '3bGsXy3UAmAsPXcBQ71ndWOKloFZfau5GAXcjyKelMrSvvxXpOVbaDMQyfId1qTm'
+api_key = ''
+api_secret = ''
 
 # Binance API istemcisine bağlanma
 client = Client(api_key, api_secret)
