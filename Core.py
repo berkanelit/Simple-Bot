@@ -9,6 +9,8 @@ api_secret = ''
 # Binance API istemcisine bağlanma
 client = Client(api_key, api_secret)
 
+print('Apiler Sisteme Eklendi Bağlantı Kuruldu...')
+
 # İşlem çifti
 symbol = 'CFXBUSD'
 
@@ -49,10 +51,15 @@ def calculate_zeromacd(klines):
     zeromacd = macd - ema_signal
     return zeromacd
 
+print('İndikatör Hesaplandı Ve İşleme Koyuldu.')
+
 # Mevcut hesap bakiyesini alma
 def get_balance(asset):
     balance = client.get_asset_balance(asset=asset)
+    print(f"{asset} bakiyesi: {balance['free']}")
     return float(balance['free'])
+
+get_balance(asset='BUSD')
 
 # Limitli alım emri verme
 def limit_buy(quantity, price):
@@ -63,6 +70,7 @@ def limit_buy(quantity, price):
         timeInForce=TIME_IN_FORCE_GTC,
         quantity=quantity,
         price=price)
+    print(f"Limitli alım emri verildi. Miktar: {quantity}, Fiyat: {price}")
     return order['orderId']
 
 # Limitli satım emri verme
@@ -74,18 +82,22 @@ def limit_sell(quantity, price):
         timeInForce=TIME_IN_FORCE_GTC,
         quantity=quantity,
         price=price)
+    print(f"Limitli satım emri verildi. Miktar: {quantity}, Fiyat: {price}")
     return order['orderId']
 
 # OCO satış emri verme
 def oco_sell(quantity, limit_price, stop_price):
+    limit_sell_price = round(limit_price * 1.03, 2)
+    stop_sell_price = round(stop_price * 0.98, 2)
     order = client.create_oco_order(
         symbol=symbol,
         side=SIDE_SELL,
         quantity=quantity,
-        price=limit_price,
-        stopPrice=stop_price,
-        stopLimitPrice=stop_price,
+        price=limit_sell_price,
+        stopPrice=stop_sell_price,
+        stopLimitPrice=stop_sell_price,
         stopLimitTimeInForce=TIME_IN_FORCE_GTC)
+    print(f"OCO satış emri verildi. Miktar: {quantity}, Limit Fiyatı: {limit_price}, Kar Fiyatı: {limit_sell_price}, Zarar Durdur Fiyatı: {stop_sell_price}")
     return order
 
 # Tüm siparişleri iptal etme
@@ -94,8 +106,12 @@ def cancel_all_orders():
     for order in open_orders:
         client.cancel_order(symbol=symbol, orderId=order['orderId'])
     print("Tüm açık emirler iptal edildi.")
+    
+# Makina çalışma durumu
+print('Core Nesnesi Başlatıldı')
 
 # Ana döngü
+is_trade_active = False
 while True:
     try:
         # Geçmiş kline'ları alma
@@ -103,9 +119,10 @@ while True:
         # ZeroMACD hesapla
         zeromacd = calculate_zeromacd(klines_15m)
         # Alım sinyali için kontrol et
-        if zeromacd > 0:
+        if zeromacd > 0 and not is_trade_active:
+            is_trade_active = True
             # Hesap bakiyesini alma
-            busd_balance = get_balance('BUSD')
+            busd_balance = get_balance('BUSD')           
             # Mevcut BUSD'ye göre alım miktarını hesapla
             quantity = round(busd_balance / float(klines_15m[-1][4]))
             # Limitli alım emri ver
@@ -117,10 +134,11 @@ while True:
                 order = client.get_order(symbol=symbol, orderId=order_id)
                 if order['status'] == 'FILLED':
                     # Satış fiyatlarını hesapla
-                    limit_price = round(float(klines_15m[-1][4]) * 1.02, 2)
-                    stop_price = round(float(klines_15m[-1][4]) * 0.99, 2)
+                    limit_price = round(float(klines_15m[-1][4]), 2)
+                    stop_price = round(float(klines_15m[-1][4]), 2)
                     # OCO satış emri ver
                     oco_sell(quantity, limit_price, stop_price)
+                    is_trade_active = False
                     break
         # Satış sinyali için kontrol et
         elif zeromacd < 0:
@@ -131,8 +149,7 @@ while True:
             # Limitli satış emri ver
             limit_price = round(float(klines_15m[-1][4]) * 0.98, 2)
             order_id = limit_sell(cfx_balance, limit_price)
-        # Tekrar kontrol etmek için 15 dakika bekle
-        print('Sistem Hesapladı.')
+        # Tekrar kontrol etmek için 0.5 dakika bekle
         time.sleep(0.5)
     except Exception as e:
         print(e)
